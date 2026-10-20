@@ -98,7 +98,7 @@ app.get('/oauth/authorize', async (req, res) => {
   const { verifier, challenge } = generatePKCE();
   await saveSession(state, { doubaoRedirectUri: doubaoRedirect, verifier });
 
-  const scopeStr = scope || 'mcp_api refresh_token offline_access'; // 官方托管 MCP 所需 scope
+  const scopeStr = process.env.SF_SCOPE || 'mcp_api refresh_token offline_access'; // 固定用正确 scope，忽略豆包传值
   const sfAuthUrl = `${SF_LOGIN_URL}/services/oauth2/authorize?` +
     'response_type=code' +
     `&client_id=${encodeURIComponent(CLIENT_ID)}` +
@@ -130,6 +130,9 @@ app.get('/oauth/callback', async (req, res) => {
     return res.redirect(doubaoCallback.toString());
   }
 
+  // 兜底：豆包换 token 时可能不带 state，改用 code 查会话
+  await saveSession('code:' + code, { ...session, state });
+
   doubaoCallback.searchParams.set('code', code);
   doubaoCallback.searchParams.set('state', state);
   res.redirect(doubaoCallback.toString());
@@ -141,6 +144,7 @@ app.get('/oauth/callback', async (req, res) => {
  */
 app.post('/oauth/token', async (req, res) => {
   const { grant_type, code, state, refresh_token } = req.body;
+  console.log('[token] 请求:', { grant_type, has_code: Boolean(code), has_state: Boolean(state), has_refresh_token: Boolean(refresh_token), bodyKeys: Object.keys(req.body || {}) });
 
   try {
     // 刷新 token：Salesforce 启用 RTR，返回的 refresh_token 是新的，客户端必须替换存储
@@ -157,11 +161,12 @@ app.post('/oauth/token', async (req, res) => {
       return res.json(response.data);
     }
 
-    // 首次授权码换 token
+    // 首次授权码换 token（豆包可能不带 state，用 code 兜底）
     if (grant_type === 'authorization_code') {
-      const session = await getSession(state);
+      let session = state ? await getSession(state) : null;
+      if (!session && code) session = await getSession('code:' + code);
       if (!session) {
-        return res.status(400).json({ error: 'invalid_grant', error_description: 'state 会话不存在或已过期' });
+        return res.status(400).json({ error: 'invalid_grant', error_description: '会话不存在或已过期' });
       }
 
       const params = new URLSearchParams({
@@ -177,7 +182,11 @@ app.post('/oauth/token', async (req, res) => {
       });
 
       await deleteSession(state); // 用完即删，防重放
-      return res.json(response.data);
+      if (code) await deleteSession('code:' + code);
+
+      const data = { ...response.data };
+      if (!data.expires_in) data.expires_in = 7200; // Salesforce 不返回 expires_in，补上提升客户端兼容性
+      return res.json(data);
     }
 
     return res.status(400).json({ error: 'unsupported_grant_type' });
