@@ -142,6 +142,31 @@ app.get('/oauth/callback', async (req, res) => {
  * 3. 换 Token（豆包的 Token URL 填这里）
  * 授权码换 token 时自动补 code_verifier；client_secret 可选（配了就带）
  */
+/**
+ * 向 Salesforce 换 token：secret 自适应
+ * confidential client 必须带 secret；public client 不能带。
+ * 桥无法预知 ECA 类型，所以先带 secret 试，被拒则去掉 secret 重试一次。
+ */
+async function sfTokenRequest(paramsObj) {
+  const call = (withSecret) => {
+    const p = new URLSearchParams(paramsObj);
+    if (withSecret && CLIENT_SECRET) p.set('client_secret', CLIENT_SECRET);
+    return axios.post(`${SF_LOGIN_URL}/services/oauth2/token`, p.toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    });
+  };
+  if (CLIENT_SECRET) {
+    try {
+      return await call(true);
+    } catch (err) {
+      console.error('[token] 带client_secret被拒:', JSON.stringify(err.response?.data || err.message));
+      console.log('[token] 自动切换为不带 secret 重试（public client 模式）');
+      return await call(false);
+    }
+  }
+  return await call(false);
+}
+
 app.post('/oauth/token', async (req, res) => {
   const { grant_type, code, state, refresh_token } = req.body;
   console.log('[token] 请求:', { grant_type, has_code: Boolean(code), has_state: Boolean(state), has_refresh_token: Boolean(refresh_token), bodyKeys: Object.keys(req.body || {}) });
@@ -149,15 +174,12 @@ app.post('/oauth/token', async (req, res) => {
   try {
     // 刷新 token：Salesforce 启用 RTR，返回的 refresh_token 是新的，客户端必须替换存储
     if (grant_type === 'refresh_token') {
-      const params = new URLSearchParams({
+      const response = await sfTokenRequest({
         grant_type: 'refresh_token',
         client_id: CLIENT_ID,
         refresh_token: refresh_token,
       });
-      if (CLIENT_SECRET) params.set('client_secret', CLIENT_SECRET); // public client 场景不配则不带
-      const response = await axios.post(`${SF_LOGIN_URL}/services/oauth2/token`, params.toString(), {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      });
+      console.log('[token] 刷新成功');
       return res.json(response.data);
     }
 
@@ -166,19 +188,16 @@ app.post('/oauth/token', async (req, res) => {
       let session = state ? await getSession(state) : null;
       if (!session && code) session = await getSession('code:' + code);
       if (!session) {
+        console.error('[token] 会话未找到: has_state=' + Boolean(state) + ', code前10位=' + String(code || '').slice(0, 10));
         return res.status(400).json({ error: 'invalid_grant', error_description: '会话不存在或已过期' });
       }
 
-      const params = new URLSearchParams({
+      const response = await sfTokenRequest({
         grant_type: 'authorization_code',
         code: code,
         client_id: CLIENT_ID,
         redirect_uri: REDIRECT_URI,
         code_verifier: session.verifier, // 核心补全
-      });
-      if (CLIENT_SECRET) params.set('client_secret', CLIENT_SECRET); // public client 场景不配则不带
-      const response = await axios.post(`${SF_LOGIN_URL}/services/oauth2/token`, params.toString(), {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       });
 
       await deleteSession(state); // 用完即删，防重放
@@ -186,11 +205,13 @@ app.post('/oauth/token', async (req, res) => {
 
       const data = { ...response.data };
       if (!data.expires_in) data.expires_in = 7200; // Salesforce 不返回 expires_in，补上提升客户端兼容性
+      console.log('[token] 授权码换 token 成功');
       return res.json(data);
     }
 
     return res.status(400).json({ error: 'unsupported_grant_type' });
   } catch (error) {
+    console.error('[token] 最终失败:', JSON.stringify(error.response?.data || error.message));
     return res.status(error.response?.status || 500).json(
       error.response?.data || { error: 'token_exchange_failed' }
     );
