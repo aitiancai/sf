@@ -8,8 +8,8 @@ app.use(express.urlencoded({ extended: true }));
 
 // =================【核心配置区】=================
 const SF_DOMAIN = 'https://salesforce.com'; // 沙箱环境请改为 https://salesforce.com
-const CLIENT_ID = '你的_SALESFORCE_CLIENT_ID';
-const CLIENT_SECRET = '你的_SALESFORCE_CLIENT_SECRET';
+const CLIENT_ID = 'SALESFORCE_CLIENT_ID';
+const CLIENT_SECRET = 'SALESFORCE_CLIENT_SECRET';
 // ===============================================
 
 // 内存中转站：用于临时绑定不同用户的 state 与 verifier (生产环境建议设置 5 分钟过期的 Redis 缓存)
