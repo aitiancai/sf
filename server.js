@@ -8,8 +8,8 @@ app.use(express.urlencoded({ extended: true }));
 app.set('trust proxy', true); // 让 req 拿到真实协议/域名（Render 在代理后）
 
 // =================【核心配置：全部走环境变量】=================
-const CLIENT_ID = '3MVG944Woww2erSLARajDkcYGUVabU43t_2vFE1cC9d6UAtKFaKJUb2dPPkfcgkqXv5o1diZoNrRjW.DqLMU.';                       // Salesforce 消费者密钥 (Consumer Key)
-const CLIENT_SECRET = 'B2FA6BE4B125C42937A18199425E18CBF3131FF21CB4ACAA5A84C81EC910B231';               // Salesforce 消费者密钥 (Consumer Secret)
+const CLIENT_ID = '3MVG944Woww2erSLARajDkcYGUVIJf.pSGsikiEYfNS81jnlrRrQ7jzOGjS4ravv0CJDvSYQBnJ_BzDTTksO4';                       // Salesforce 消费者密钥 (Consumer Key)
+const CLIENT_SECRET = 'AE85B47D34D07733B33815239594EFD2233E35EF4DC2FA5749B5B0FFD78FBA4D';               // Salesforce 消费者密钥 (Consumer Secret)
 const SF_LOGIN_URL = 'https://login.salesforce.com'
 const REDIRECT_URI = 'https://sf-mcp-proxy.onrender.com/oauth/callback';                    // 必须与 ECA/Connected App 里注册的回调完全一致，如 https://xxx.onrender.com/oauth/callback
 const DOUBAO_REDIRECT_URI = 'https://api.doubao-dev.com/api/oauth/v1/callback/enterprise/f34291a8-3801-4d8b-a197-e4fc0fc97150';      // 可选：豆包回调兜底（豆包不传 redirect_uri 时用）
