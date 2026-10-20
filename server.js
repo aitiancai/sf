@@ -7,7 +7,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // =================【核心配置区】=================
-const SF_DOMAIN = 'https://salesforce.com'; // 沙箱环境请改为 https://salesforce.com
+const SF_DOMAIN = 'https://login.salesforce.com'; // 沙箱环境请改为 https://salesforce.com
 const CLIENT_ID = 'SALESFORCE_CLIENT_ID';
 const CLIENT_SECRET = 'SALESFORCE_CLIENT_SECRET';
 // ===============================================
